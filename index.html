@@ -116,7 +116,6 @@
                 📁 Load JSON File
             </label>
             <input type="file" id="jsonInput" accept=".json" multiple>
-        </div>
     </header>
 
     <div class="tabs-container" id="tabsContainer"></div>
@@ -154,6 +153,11 @@
 
     const bonusOptions = [
         { value: "", label: "Bonus..." },
+        // --- NOUVELLES OPTIONS GÉNÉRALES ---
+        { value: "ANY_ATTAQUE", label: "▶ Bonus Attaque" },
+        { value: "ANY_AFFINITE", label: "▶ Bonus Affinité" },
+        { value: "ANY_ELEMENT", label: "▶ Bonus Élément" },
+        // -----------------------------------
         { value: "Bonus affinité I", label: "Affinité I" },
         { value: "Bonus affinité II", label: "Affinité II" },
         { value: "Bonus affinité III", label: "Affinité III" },
@@ -172,7 +176,7 @@
         const container = document.getElementById('customFiltersContainer');
         let html = '';
         for (let i = 1; i <= 5; i++) {
-            html += `<select id="slot${i}" class="dark-select" onchange="applyFilters()"><option value="">Filtre perso ${i}</option>${bonusOptions.filter(o => o.value !== "").map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}</select>`;
+            html += `<select id="slot${i}" class="dark-select" onchange="applyFilters()"><option value="">Any ${i}</option>${bonusOptions.filter(o => o.value !== "").map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}</select>`;
             if (i < 5) html += `<select id="op${i}" class="op-select" onchange="applyFilters()"><option value="AND">Et</option><option value="OR">Ou</option></select>`;
         }
         container.innerHTML = html;
@@ -280,14 +284,26 @@
             else if (filter4EX) defaultPass = (exCount >= 4);
             const hasStandardFilter = filter3EX || filter4EX;
 
-            // 2. Filtres Personnalisés (Nouvelle logique de "consommation")
+            // 2. Filtres Personnalisés
             let customPass = true;
             if (activeSlots.length > 0) {
-                let tempBonuses = [...bonuses]; // Copie des bonus de cet essai
+                let tempBonuses = [...bonuses]; 
                 
-                // Fonction qui cherche un bonus, le retire du tableau temporaire et renvoie true s'il est trouvé
                 const consumeBonus = (val) => {
-                    let idx = tempBonuses.indexOf(val);
+                    let idx = -1;
+
+                    // Gérer les options générales (On cherche si le mot clé est inclus)
+                    if (val === "ANY_ATTAQUE") {
+                        idx = tempBonuses.findIndex(b => b.toLowerCase().includes("attaque"));
+                    } else if (val === "ANY_AFFINITE") {
+                        idx = tempBonuses.findIndex(b => b.toLowerCase().includes("affinité"));
+                    } else if (val === "ANY_ELEMENT") {
+                        idx = tempBonuses.findIndex(b => b.toLowerCase().includes("élémentaire"));
+                    } else {
+                        // Gérer les options spécifiques (Correspondance stricte)
+                        idx = tempBonuses.indexOf(val);
+                    }
+
                     if (idx !== -1) {
                         tempBonuses.splice(idx, 1);
                         return true;
@@ -303,14 +319,12 @@
                     const operator = activeSlots[i-1].op;
                     
                     if (operator === 'AND') {
-                        // Si c'est un ET, on ne cherche (et consomme) le bonus que si la condition précédente était vraie
                         if (customPass) {
                             customPass = consumeBonus(activeSlots[i].val);
                         } else {
                             customPass = false;
                         }
                     } else if (operator === 'OR') {
-                        // Si c'est un OU, on ne cherche (et consomme) le bonus que si la condition précédente n'était PAS remplie
                         if (!customPass) {
                             customPass = consumeBonus(activeSlots[i].val);
                         }
