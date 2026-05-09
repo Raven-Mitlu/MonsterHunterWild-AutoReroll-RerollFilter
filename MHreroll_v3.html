@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Ulti's Reroll Filter</title>
+    <style>
+        /* Styles de base et reset */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #1a1b26; 
+            color: #a9b1d6;
+            min-height: 100vh;
+        }
+
+        /* --- Overlay Drag & Drop --- */
+        #drop-zone {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(26, 27, 38, 0.9); border: 4px dashed #7aa2f7;
+            display: none; justify-content: center; align-items: center; flex-direction: column;
+            z-index: 9999; color: #7aa2f7; font-size: 24px; font-weight: bold; pointer-events: none;
+        }
+        #drop-zone p { margin-top: 10px; font-size: 16px; color: #a9b1d6; font-weight: normal; }
+        body.dragover #drop-zone { display: flex; }
+
+        /* --- En-tête (Header) --- */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 25px; background-color: #16161e; border-bottom: 1px solid #101014;
+        }
+        .logo-title { display: flex; align-items: center; gap: 12px; }
+        .logo { color: #8aa2f7; font-size: 24px; }
+        .header h1 { color: #8aa2f7; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+
+        .btn-dark {
+            background-color: transparent; color: #a9b1d6; border: 1px solid #3b4261;
+            padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .btn-dark:hover { background-color: #292e42; color: #c0caf5; }
+
+        .btn-primary {
+            background-color: #7aa2f7; color: #1a1b26; border: none; padding: 8px 16px;
+            border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;
+            display: inline-flex; align-items: center; gap: 8px; transition: background 0.2s;
+        }
+        .btn-primary:hover { background-color: #8aa2f7; }
+        #jsonInput { display: none; }
+
+        /* --- Onglets (Tabs) --- */
+        .tabs-container {
+            padding: 20px 25px 0; background-color: #16161e; display: flex; gap: 8px;
+            border-bottom: 1px solid #292e42; overflow-x: auto;
+        }
+        .tab-btn {
+            background-color: #1f2335; color: #565f89; border: 1px solid transparent; border-bottom: none;
+            padding: 12px 20px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: all 0.2s; white-space: nowrap;
+        }
+        .tab-btn:hover { background-color: #24283b; color: #a9b1d6; }
+        .tab-btn.active {
+            background-color: #24283b; color: #8aa2f7;
+            border-top: 2px solid #8aa2f7; border-left: 1px solid #292e42; border-right: 1px solid #292e42;
+        }
+
+        /* --- Métadonnées --- */
+        .meta-bar {
+            background-color: #24283b; padding: 15px 25px; display: flex; gap: 40px;
+            border-bottom: 1px solid #101014;
+        }
+        .meta-group { display: flex; flex-direction: column; gap: 5px; }
+        .meta-label { color: #565f89; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+        .meta-value { color: #c0caf5; font-size: 14px; font-weight: bold; }
+
+        /* --- Zone des Filtres --- */
+        .filters-section { padding: 20px 25px; background-color: #1a1b26; display: flex; flex-direction: column; gap: 20px; border-bottom: 2px solid #101014; }
+        .filters-row { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .filter-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #7aa2f7; font-weight: 500; }
+        select.dark-select { background-color: #1f2335; color: #c0caf5; border: 1px solid #292e42; padding: 8px 12px; border-radius: 4px; font-size: 13px; outline: none; cursor: pointer; }
+        select.dark-select:focus { border-color: #7aa2f7; }
+        .op-select { background: transparent; border: none; color: #565f89; font-size: 13px; font-weight: bold; cursor: pointer; outline: none; }
+        
+        .checkbox-group { display: flex; gap: 15px; padding-left: 15px; border-left: 1px solid #292e42; }
+        .custom-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #c0caf5; user-select: none; }
+        .custom-checkbox input[type="checkbox"] { accent-color: #7aa2f7; width: 16px; height: 16px; cursor: pointer; }
+
+        /* --- Zone de résultats --- */
+        .results-wrapper { padding: 25px; }
+        .results-header { font-style: italic; color: #565f89; margin-bottom: 20px; font-size: 13px; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        
+        .result-card { background-color: #24283b; border-left: 4px solid #e0af68; padding: 15px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 8px; }
+        .card-title { color: #c0caf5; font-weight: bold; font-size: 15px; }
+        .card-date { color: #565f89; font-size: 12px; margin-bottom: 8px; }
+        .bonus-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: #a9b1d6; }
+        
+        .lvl-II { color: #9ece6a; font-weight: bold; }
+        .lvl-III { color: #7dcfff; font-weight: bold; }
+        .lvl-EX { color: #f7768e; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+    <div id="drop-zone">
+        📥 Relâchez vos fichiers JSON ici
+        <p>Plusieurs fichiers pris en charge</p>
+    </div>
+
+    <header class="header">
+        <div class="logo-title">
+            <span class="logo">⬢</span>
+            <h1>Ulti's Reroll Filter</h1>
+        </div>
+            <label for="jsonInput" class="btn-primary">
+                📁 Load JSON File
+            </label>
+            <input type="file" id="jsonInput" accept=".json" multiple>
+        </div>
+    </header>
+
+    <div class="tabs-container" id="tabsContainer"></div>
+
+    <div class="meta-bar" id="metaBar" style="display: none;">
+        <div class="meta-group"><span class="meta-label">Weapon</span><span class="meta-value" id="metaWeapon">-</span></div>
+        <div class="meta-group"><span class="meta-label">Attribute</span><span class="meta-value" id="metaAttr">-</span></div>
+        <div class="meta-group"><span class="meta-label">Mode</span><span class="meta-value" id="metaMode">-</span></div>
+        <div class="meta-group"><span class="meta-label">Attempts</span><span class="meta-value" id="metaAttempts">-</span></div>
+    </div>
+
+    <div class="filters-section">
+        <div class="filters-row">
+            <div class="filter-label">🔍 Global Filter</div>
+            <select id="mainOp" class="dark-select" onchange="applyFilters()">
+                <option value="AND">Liaison ET</option>
+                <option value="OR">Liaison OU</option>
+            </select>
+            <div class="checkbox-group">
+                <label class="custom-checkbox"><input type="checkbox" id="chk3ex" onchange="applyFilters()"> Au moins 3 EX</label>
+                <label class="custom-checkbox"><input type="checkbox" id="chk4ex" onchange="applyFilters()"> Au moins 4 EX</label>
+            </div>
+        </div>
+        <div class="filters-row" id="customFiltersContainer"></div>
+    </div>
+
+    <div class="results-wrapper">
+        <div class="results-header" id="resultsCountText">Veuillez charger un fichier JSON pour commencer.</div>
+        <div class="results-grid" id="resultsContainer"></div>
+    </div>
+
+<script>
+    let loadedWeapons = []; 
+    let activeWeaponIndex = -1; 
+
+    const bonusOptions = [
+        { value: "", label: "Bonus..." },
+        { value: "Bonus affinité I", label: "Affinité I" },
+        { value: "Bonus affinité II", label: "Affinité II" },
+        { value: "Bonus affinité III", label: "Affinité III" },
+        { value: "Bonus affinité EX", label: "Affinité EX" },
+        { value: "Bonus attaque I", label: "Attaque I" },
+        { value: "Bonus attaque II", label: "Attaque II" },
+        { value: "Bonus attaque III", label: "Attaque III" },
+        { value: "Bonus attaque EX", label: "Attaque EX" },
+        { value: "Boost élémentaire I", label: "Élémentaire I" },
+        { value: "Boost élémentaire II", label: "Élémentaire II" },
+        { value: "Boost élémentaire III", label: "Élémentaire III" },
+        { value: "Boost élémentaire EX", label: "Élémentaire EX" }
+    ];
+
+    function initCustomFilters() {
+        const container = document.getElementById('customFiltersContainer');
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            html += `<select id="slot${i}" class="dark-select" onchange="applyFilters()"><option value="">Filtre perso ${i}</option>${bonusOptions.filter(o => o.value !== "").map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}</select>`;
+            if (i < 5) html += `<select id="op${i}" class="op-select" onchange="applyFilters()"><option value="AND">Et</option><option value="OR">Ou</option></select>`;
+        }
+        container.innerHTML = html;
+    }
+
+    // --- Drag & Drop ---
+    const body = document.body;
+    body.addEventListener('dragover', (e) => { e.preventDefault(); body.classList.add('dragover'); });
+    body.addEventListener('dragleave', (e) => { if (e.clientX === 0 || e.clientY === 0) body.classList.remove('dragover'); });
+    body.addEventListener('drop', (e) => { e.preventDefault(); body.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+    document.getElementById('jsonInput').addEventListener('change', (e) => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+        Array.from(files).forEach(file => {
+            if (!file.name.endsWith('.json')) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const parsed = JSON.parse(event.target.result);
+                    if (parsed.weapons && parsed.weapons.length > 0) {
+                        parsed.weapons.forEach(w => loadedWeapons.push(w));
+                        renderTabs();
+                        if (activeWeaponIndex === -1) selectTab(0); 
+                    }
+                } catch (err) { console.error("Erreur lecture JSON:", file.name); }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    function renderTabs() {
+        const container = document.getElementById('tabsContainer');
+        container.innerHTML = '';
+        loadedWeapons.forEach((weapon, index) => {
+            const btn = document.createElement('div');
+            btn.className = `tab-btn ${index === activeWeaponIndex ? 'active' : ''}`;
+            btn.textContent = weapon.nickname || `Arme ${index + 1}`;
+            btn.onclick = () => selectTab(index);
+            container.appendChild(btn);
+        });
+    }
+
+    function selectTab(index) {
+        activeWeaponIndex = index;
+        renderTabs();
+        const weapon = loadedWeapons[index];
+        if (weapon) {
+            document.getElementById('metaBar').style.display = 'flex';
+            document.getElementById('metaWeapon').textContent = weapon.weaponTypeName || '-';
+            document.getElementById('metaAttr').textContent = weapon.attribute || '-';
+            document.getElementById('metaMode').textContent = weapon.mode || '-';
+            document.getElementById('metaAttempts').textContent = weapon.attempts ? weapon.attempts.length : '0';
+        }
+        applyFilters();
+    }
+
+    function resetFilters() {
+        document.getElementById('chk3ex').checked = false;
+        document.getElementById('chk4ex').checked = false;
+        document.getElementById('mainOp').value = 'AND';
+        for (let i = 1; i <= 5; i++) {
+            document.getElementById(`slot${i}`).value = "";
+            if (i < 5) document.getElementById(`op${i}`).value = "AND";
+        }
+        applyFilters();
+    }
+
+    function parseBonusString(bonusString) {
+        const parts = bonusString.split(' ');
+        const niveau = parts.pop(); 
+        const nom = parts.join(' ');
+        return { nom, niveau };
+    }
+
+    function applyFilters() {
+        if (activeWeaponIndex === -1 || !loadedWeapons[activeWeaponIndex]) return;
+
+        const mainOp = document.getElementById('mainOp').value;
+        const filter3EX = document.getElementById('chk3ex').checked;
+        const filter4EX = document.getElementById('chk4ex').checked;
+        
+        const resultsContainer = document.getElementById('resultsContainer');
+        resultsContainer.innerHTML = "";
+        let matchCount = 0;
+
+        let activeSlots = [];
+        for (let i = 1; i <= 5; i++) {
+            const val = document.getElementById(`slot${i}`).value;
+            const op = (i < 5) ? document.getElementById(`op${i}`).value : 'AND';
+            if (val !== "") activeSlots.push({ val: val, op: op });
+        }
+
+        const weapon = loadedWeapons[activeWeaponIndex];
+        const totalAttempts = weapon.attempts.length;
+
+        weapon.attempts.forEach(attempt => {
+            const bonuses = attempt.bonuses;
+            
+            // 1. Filtres Standards
+            let defaultPass = false;
+            const exCount = bonuses.filter(b => b.endsWith('EX')).length;
+            if (filter3EX && filter4EX) defaultPass = (exCount >= 4);
+            else if (filter3EX) defaultPass = (exCount >= 3);
+            else if (filter4EX) defaultPass = (exCount >= 4);
+            const hasStandardFilter = filter3EX || filter4EX;
+
+            // 2. Filtres Personnalisés (Nouvelle logique de "consommation")
+            let customPass = true;
+            if (activeSlots.length > 0) {
+                let tempBonuses = [...bonuses]; // Copie des bonus de cet essai
+                
+                // Fonction qui cherche un bonus, le retire du tableau temporaire et renvoie true s'il est trouvé
+                const consumeBonus = (val) => {
+                    let idx = tempBonuses.indexOf(val);
+                    if (idx !== -1) {
+                        tempBonuses.splice(idx, 1);
+                        return true;
+                    }
+                    return false;
+                };
+
+                // Évaluation du premier emplacement
+                customPass = consumeBonus(activeSlots[0].val);
+
+                // Évaluation des emplacements suivants
+                for (let i = 1; i < activeSlots.length; i++) {
+                    const operator = activeSlots[i-1].op;
+                    
+                    if (operator === 'AND') {
+                        // Si c'est un ET, on ne cherche (et consomme) le bonus que si la condition précédente était vraie
+                        if (customPass) {
+                            customPass = consumeBonus(activeSlots[i].val);
+                        } else {
+                            customPass = false;
+                        }
+                    } else if (operator === 'OR') {
+                        // Si c'est un OU, on ne cherche (et consomme) le bonus que si la condition précédente n'était PAS remplie
+                        if (!customPass) {
+                            customPass = consumeBonus(activeSlots[i].val);
+                        }
+                    }
+                }
+            }
+
+            // 3. Combinaison Finale
+            let finalPass = false;
+            if (hasStandardFilter && activeSlots.length > 0) {
+                if (mainOp === 'AND') finalPass = defaultPass && customPass;
+                if (mainOp === 'OR') finalPass = defaultPass || customPass;
+            } else if (hasStandardFilter) {
+                finalPass = defaultPass;
+            } else if (activeSlots.length > 0) {
+                finalPass = customPass;
+            } else {
+                finalPass = true;
+            }
+
+            // 4. Affichage
+            if (finalPass) {
+                matchCount++;
+                let bonusesHtml = '';
+                bonuses.forEach(b => {
+                    const parsed = parseBonusString(b);
+                    bonusesHtml += `
+                        <div class="bonus-row">
+                            <span>${parsed.nom}</span>
+                            <span class="lvl-${parsed.niveau}">${parsed.niveau}</span>
+                        </div>`;
+                });
+
+                resultsContainer.innerHTML += `
+                    <div class="result-card">
+                        <div class="card-title">Essai #${attempt.attemptNum}</div>
+                        <div class="card-date">${attempt.timestamp}</div>
+                        <div>${bonusesHtml}</div>
+                    </div>`;
+            }
+        });
+
+        document.getElementById('resultsCountText').innerText = `${matchCount} essai(s) trouvé(s) sur un total de ${totalAttempts} (Onglet: ${weapon.nickname})`;
+    }
+
+    initCustomFilters();
+</script>
+</body>
+</html>
