@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Ulti's Reroll Filter</title>
+    <style>
+        /* Styles de base et reset */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #1a1b26; 
+            color: #a9b1d6;
+            min-height: 100vh;
+        }
+
+        /* --- Overlay Drag & Drop --- */
+        #drop-zone {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(26, 27, 38, 0.9); border: 4px dashed #7aa2f7;
+            display: none; justify-content: center; align-items: center; flex-direction: column;
+            z-index: 9999; color: #7aa2f7; font-size: 24px; font-weight: bold; pointer-events: none;
+        }
+        #drop-zone p { margin-top: 10px; font-size: 16px; color: #a9b1d6; font-weight: normal; }
+        body.dragover #drop-zone { display: flex; }
+
+        /* --- En-tête (Header) --- */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 25px; background-color: #16161e; border-bottom: 1px solid #101014;
+        }
+        .logo-title { display: flex; align-items: center; gap: 12px; }
+        .logo { color: #8aa2f7; font-size: 24px; }
+        .header h1 { color: #8aa2f7; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+
+        .btn-dark {
+            background-color: transparent; color: #a9b1d6; border: 1px solid #3b4261;
+            padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .btn-dark:hover { background-color: #292e42; color: #c0caf5; }
+
+        .btn-primary {
+            background-color: #7aa2f7; color: #1a1b26; border: none; padding: 8px 16px;
+            border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;
+            display: inline-flex; align-items: center; gap: 8px; transition: background 0.2s;
+        }
+        .btn-primary:hover { background-color: #8aa2f7; }
+        #jsonInput { display: none; }
+
+        /* --- Onglets (Tabs) --- */
+        .tabs-container {
+            padding: 20px 25px 0; background-color: #16161e; display: flex; gap: 8px;
+            border-bottom: 1px solid #292e42; overflow-x: auto;
+        }
+        .tab-btn {
+            background-color: #1f2335; color: #565f89; border: 1px solid transparent; border-bottom: none;
+            padding: 12px 20px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: all 0.2s; white-space: nowrap;
+        }
+        .tab-btn:hover { background-color: #24283b; color: #a9b1d6; }
+        .tab-btn.active {
+            background-color: #24283b; color: #8aa2f7;
+            border-top: 2px solid #8aa2f7; border-left: 1px solid #292e42; border-right: 1px solid #292e42;
+        }
+
+        /* --- Métadonnées --- */
+        .meta-bar {
+            background-color: #24283b; padding: 15px 25px; display: flex; gap: 40px;
+            border-bottom: 1px solid #101014;
+        }
+        .meta-group { display: flex; flex-direction: column; gap: 5px; }
+        .meta-label { color: #565f89; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+        .meta-value { color: #c0caf5; font-size: 14px; font-weight: bold; }
+
+        /* --- Zone des Filtres --- */
+        .filters-section { padding: 20px 25px; background-color: #1a1b26; border-bottom: 2px solid #101014; }
+        .filter-wrapper { display: flex; flex-direction: column; gap: 20px; }
+        .filters-row { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .filter-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #7aa2f7; font-weight: 500; }
+        select.dark-select { background-color: #1f2335; color: #c0caf5; border: 1px solid #292e42; padding: 8px 12px; border-radius: 4px; font-size: 13px; outline: none; cursor: pointer; }
+        select.dark-select:focus { border-color: #7aa2f7; }
+        .op-select { background: transparent; border: none; color: #565f89; font-size: 13px; font-weight: bold; cursor: pointer; outline: none; }
+        
+        .checkbox-group { display: flex; gap: 15px; padding-left: 15px; border-left: 1px solid #292e42; }
+        .custom-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #c0caf5; user-select: none; }
+        .custom-checkbox input[type="checkbox"] { accent-color: #7aa2f7; width: 16px; height: 16px; cursor: pointer; }
+
+        /* --- Zone de résultats --- */
+        .results-wrapper { padding: 25px; }
+        .results-header { font-style: italic; color: #565f89; margin-bottom: 20px; font-size: 13px; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        
+        .result-card { background-color: #24283b; border-left: 4px solid #e0af68; padding: 15px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 8px; position: relative; }
+        .card-header-top { display: flex; justify-content: space-between; align-items: flex-start; }
+        .card-title { color: #c0caf5; font-weight: bold; font-size: 15px; }
+        .card-date { color: #565f89; font-size: 12px; margin-bottom: 8px; }
+        .bonus-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: #a9b1d6; }
+        .skill-row { font-size: 13px; padding: 3px 0; color: #a9b1d6; }
+        .skill-type { color: #565f89; font-weight: bold; display: inline-block; width: 60px; }
+        .skill-value { color: #7dcfff; font-weight: bold; }
+        
+        .lvl-II { color: #9ece6a; font-weight: bold; }
+        .lvl-III { color: #7dcfff; font-weight: bold; }
+        .lvl-EX { color: #f7768e; font-weight: bold; }
+
+        /* Bouton Favoris (Étoile) */
+        .star-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: #565f89; transition: transform 0.2s; }
+        .star-btn:hover { transform: scale(1.2); }
+        .star-btn.is-fav { color: #e0af68; }
+
+        /* --- Modal Favoris --- */
+        #favoritesModal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); z-index: 10000; display: none;
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: #1a1b26; border: 1px solid #292e42; border-radius: 8px;
+            width: 90%; max-width: 1000px; max-height: 85vh; display: flex; flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+        .modal-header {
+            padding: 20px; border-bottom: 1px solid #292e42; display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h2 { color: #e0af68; font-size: 20px; margin: 0; display: flex; align-items: center; gap: 10px; }
+        .close-modal { background: none; border: none; color: #f7768e; font-size: 24px; cursor: pointer; font-weight: bold; }
+        .modal-body {
+            padding: 20px; overflow-y: auto; display: flex; gap: 20px; flex: 1;
+        }
+        .fav-col {
+            flex: 1; background: #16161e; border: 1px solid #292e42; border-radius: 6px; padding: 15px;
+        }
+        .fav-col h3 { text-align: center; color: #8aa2f7; border-bottom: 1px solid #292e42; padding-bottom: 10px; margin-bottom: 15px; font-size: 16px; }
+        .fav-item { background: #24283b; padding: 12px; border-radius: 4px; margin-bottom: 10px; border-left: 3px solid #e0af68; position: relative; }
+        .fav-item .remove-fav { position: absolute; top: 10px; right: 10px; cursor: pointer; color: #f7768e; font-size: 14px; }
+        .fav-item-title { font-weight: bold; color: #c0caf5; font-size: 14px; margin-bottom: 5px; }
+
+    </style>
+</head>
+<body>
+
+    <div id="drop-zone">
+        📥 Relâchez vos fichiers JSON ici
+        <p>Plusieurs fichiers pris en charge</p>
+    </div>
+
+    <div id="favoritesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⭐ Mes Essais Favoris</h2>
+                <button class="close-modal" onclick="toggleFavoritesModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="fav-col">
+                    <h3>Grinding (Bonus)</h3>
+                    <div id="favGrindingList"></div>
+                </div>
+                <div class="fav-col">
+                    <h3>Lottery (Skills)</h3>
+                    <div id="favLotteryList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="logo-title">
+            <span class="logo">⬢</span>
+            <h1>Ulti's Reroll Filter</h1>
+        </div>
+        <div class="header-actions">
+            <button class="btn-dark" onclick="toggleFavoritesModal()" style="color: #e0af68; border-color: #e0af68;">⭐ Favoris</button>
+            <label for="jsonInput" class="btn-primary">
+                📁 Load JSON File
+            </label>
+            <input type="file" id="jsonInput" accept=".json" multiple>
+        </div>
+    </header>
+
+    <div class="tabs-container" id="tabsContainer"></div>
+
+    <div class="meta-bar" id="metaBar" style="display: none;">
+        <div class="meta-group"><span class="meta-label">Weapon</span><span class="meta-value" id="metaWeapon">-</span></div>
+        <div class="meta-group"><span class="meta-label">Attribute</span><span class="meta-value" id="metaAttr">-</span></div>
+        <div class="meta-group"><span class="meta-label">Mode</span><span class="meta-value" id="metaMode">-</span></div>
+        <div class="meta-group"><span class="meta-label">Attempts</span><span class="meta-value" id="metaAttempts">-</span></div>
+    </div>
+
+    <div class="filters-section">
+        <div id="grindingFilters" class="filter-wrapper" style="display: none;">
+            <div class="filters-row">
+                <div class="filter-label">🔍 Global Filter (Bonus)</div>
+                <select id="mainOp" class="dark-select" onchange="applyFilters()">
+                    <option value="AND">Liaison ET</option>
+                    <option value="OR">Liaison OU</option>
+                </select>
+                <div class="checkbox-group">
+                    <label class="custom-checkbox"><input type="checkbox" id="chk3ex" onchange="applyFilters()"> Au moins 3 EX</label>
+                    <label class="custom-checkbox"><input type="checkbox" id="chk4ex" onchange="applyFilters()"> Au moins 4 EX</label>
+                </div>
+            </div>
+            <div class="filters-row" id="customFiltersContainer"></div>
+        </div>
+
+        <div id="lotteryFilters" class="filter-wrapper" style="display: none;">
+            <div class="filters-row">
+                <div class="filter-label">🎯 Filtres Lottery (Skills)</div>
+                <select id="filterGroup" class="dark-select" onchange="applyFilters()">
+                    <option value="">-- Tous les Groupes --</option>
+                </select>
+                <select id="filterSeries" class="dark-select" onchange="applyFilters()">
+                    <option value="">-- Toutes les Séries --</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="results-wrapper">
+        <div class="results-header" id="resultsCountText">Veuillez charger un fichier JSON pour commencer.</div>
+        <div class="results-grid" id="resultsContainer"></div>
+    </div>
+
+<script>
+    let loadedWeapons = []; 
+    let activeWeaponIndex = -1; 
+    let favorites = []; // Format : { wIdx: 0, aIdx: 0 }
+
+    // Listes dynamiques pour Lottery
+    let skillGroupsList = new Set([
+        "Appétit de l'Arkveld", "Couverture de l'Uth Duna", "Cristal de chevalier noir", "Esprit du Blangonga", 
+        "Furie du Léviathan", "Gogmapocalypse", "Mutinerie du Nu Udra", "Pouls du Zoh Shia", "Pouvoir de l'Odogaron désastre", 
+        "Prouesse du Mizutsune", "Puissance du Doshaguma", "Révolte du Jin Dahaad", "Tension du Rey Dau", 
+        "Tyrannie du Gore Magala", "Ténacité du Seregios", "Vigueur du Xu Wu", "Vitalité de l'Arkveld Gardien", 
+        "Volonté de l'Anjanath tonnerre", "Éclat du Rathalos"
+    ]);
+    let skillSeriesList = new Set([
+        "Alerte Neopteron", "Camouflage Neopteron", "Cuir souple", "Douceur du cuir", "Faveur du seigneur", 
+        "Maîtrise des écailles", "Pelage attrayant", "Pelage de renforcement", "Pouls du Gardien", "Protection du Gardien", 
+        "Rage supérieure", "Sagesse transmise", "Âme du seigneur", "Écailles superposées"
+    ]);
+
+    const bonusOptions = [
+        { value: "", label: "Bonus..." },
+        { value: "ANY_ATTAQUE", label: "▶ Toute Attaque" },
+        { value: "ANY_AFFINITE", label: "▶ Toute Affinité" },
+        { value: "ANY_ELEMENT", label: "▶ Tout Élément" },
+        { value: "Bonus affinité I", label: "Affinité I" },
+        { value: "Bonus affinité II", label: "Affinité II" },
+        { value: "Bonus affinité III", label: "Affinité III" },
+        { value: "Bonus affinité EX", label: "Affinité EX" },
+        { value: "Bonus attaque I", label: "Attaque I" },
+        { value: "Bonus attaque II", label: "Attaque II" },
+        { value: "Bonus attaque III", label: "Attaque III" },
+        { value: "Bonus attaque EX", label: "Attaque EX" },
+        { value: "Boost élémentaire I", label: "Élémentaire I" },
+        { value: "Boost élémentaire II", label: "Élémentaire II" },
+        { value: "Boost élémentaire III", label: "Élémentaire III" },
+        { value: "Boost élémentaire EX", label: "Élémentaire EX" }
+    ];
+
+    function initCustomFilters() {
+        const container = document.getElementById('customFiltersContainer');
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            html += `<select id="slot${i}" class="dark-select" onchange="applyFilters()"><option value="">Any ${i}</option>${bonusOptions.filter(o => o.value !== "").map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}</select>`;
+            if (i < 5) html += `<select id="op${i}" class="op-select" onchange="applyFilters()"><option value="AND">Et</option><option value="OR">Ou</option></select>`;
+        }
+        container.innerHTML = html;
+        updateLotterySelects();
+    }
+
+    function updateLotterySelects() {
+        const grpSelect = document.getElementById('filterGroup');
+        const serSelect = document.getElementById('filterSeries');
+        
+        let grpHtml = '<option value="">-- Tous les Groupes --</option>';
+        Array.from(skillGroupsList).sort().forEach(g => { grpHtml += `<option value="${g}">${g}</option>`; });
+        grpSelect.innerHTML = grpHtml;
+
+        let serHtml = '<option value="">-- Toutes les Séries --</option>';
+        Array.from(skillSeriesList).sort().forEach(s => { serHtml += `<option value="${s}">${s}</option>`; });
+        serSelect.innerHTML = serHtml;
+    }
+
+    // --- Drag & Drop ---
+    const body = document.body;
+    body.addEventListener('dragover', (e) => { e.preventDefault(); body.classList.add('dragover'); });
+    body.addEventListener('dragleave', (e) => { if (e.clientX === 0 || e.clientY === 0) body.classList.remove('dragover'); });
+    body.addEventListener('drop', (e) => { e.preventDefault(); body.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+    document.getElementById('jsonInput').addEventListener('change', (e) => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+        Array.from(files).forEach(file => {
+            if (!file.name.endsWith('.json')) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const parsed = JSON.parse(event.target.result);
+                    if (parsed.weapons && parsed.weapons.length > 0) {
+                        parsed.weapons.forEach(w => {
+                            loadedWeapons.push(w);
+                            // Collecter dynamiquement les talents manquants
+                            if(w.mode === 'lottery') {
+                                w.attempts.forEach(a => {
+                                    if(a.skills) {
+                                        if(a.skills.group) skillGroupsList.add(a.skills.group);
+                                        if(a.skills.series) skillSeriesList.add(a.skills.series);
+                                    }
+                                });
+                            }
+                        });
+                        updateLotterySelects();
+                        renderTabs();
+                        if (activeWeaponIndex === -1) selectTab(0); 
+                    }
+                } catch (err) { console.error("Erreur lecture JSON:", file.name); }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    function renderTabs() {
+        const container = document.getElementById('tabsContainer');
+        container.innerHTML = '';
+        loadedWeapons.forEach((weapon, index) => {
+            const btn = document.createElement('div');
+            btn.className = `tab-btn ${index === activeWeaponIndex ? 'active' : ''}`;
+            btn.textContent = `${weapon.nickname || `Arme ${index + 1}`} (${weapon.mode})`;
+            btn.onclick = () => selectTab(index);
+            container.appendChild(btn);
+        });
+    }
+
+    function selectTab(index) {
+        activeWeaponIndex = index;
+        renderTabs();
+        const weapon = loadedWeapons[index];
+        if (weapon) {
+            document.getElementById('metaBar').style.display = 'flex';
+            document.getElementById('metaWeapon').textContent = weapon.weaponTypeName || '-';
+            document.getElementById('metaAttr').textContent = weapon.attribute || '-';
+            document.getElementById('metaMode').textContent = weapon.mode || '-';
+            document.getElementById('metaAttempts').textContent = weapon.attempts ? weapon.attempts.length : '0';
+
+            // Afficher le bon panneau de filtres
+            if(weapon.mode === 'grinding') {
+                document.getElementById('grindingFilters').style.display = 'flex';
+                document.getElementById('lotteryFilters').style.display = 'none';
+            } else {
+                document.getElementById('grindingFilters').style.display = 'none';
+                document.getElementById('lotteryFilters').style.display = 'flex';
+            }
+        }
+        applyFilters();
+    }
+
+    function parseBonusString(bonusString) {
+        const parts = bonusString.split(' ');
+        const niveau = parts.pop(); 
+        const nom = parts.join(' ');
+        return { nom, niveau };
+    }
+
+    // --- LOGIQUE FAVORIS ---
+    function toggleFavorite(wIdx, aIdx) {
+        const index = favorites.findIndex(f => f.wIdx === wIdx && f.aIdx === aIdx);
+        if (index > -1) {
+            favorites.splice(index, 1);
+        } else {
+            favorites.push({ wIdx, aIdx });
+        }
+        applyFilters(); // Rafraîchit l'affichage des étoiles
+        renderFavoritesModal(); // Rafraîchit le modal s'il est ouvert
+    }
+
+    function toggleFavoritesModal() {
+        const modal = document.getElementById('favoritesModal');
+        if (modal.style.display === 'flex') {
+            modal.style.display = 'none';
+        } else {
+            renderFavoritesModal();
+            modal.style.display = 'flex';
+        }
+    }
+
+    function renderFavoritesModal() {
+        const gridFavs = document.getElementById('favGrindingList');
+        const lotFavs = document.getElementById('favLotteryList');
+        gridFavs.innerHTML = ''; lotFavs.innerHTML = '';
+
+        // Trier par numéro d'essai croissant
+        let sortedFavs = [...favorites].sort((a, b) => {
+            const attemptA = loadedWeapons[a.wIdx].attempts[a.aIdx].attemptNum;
+            const attemptB = loadedWeapons[b.wIdx].attempts[b.aIdx].attemptNum;
+            return attemptA - attemptB;
+        });
+
+        sortedFavs.forEach(fav => {
+            const w = loadedWeapons[fav.wIdx];
+            const a = w.attempts[fav.aIdx];
+            
+            let contentHtml = '';
+            if (w.mode === 'grinding' && a.bonuses) {
+                a.bonuses.forEach(b => {
+                    const parsed = parseBonusString(b);
+                    contentHtml += `<div class="bonus-row"><span>${parsed.nom}</span><span class="lvl-${parsed.niveau}">${parsed.niveau}</span></div>`;
+                });
+            } else if (w.mode === 'lottery' && a.skills) {
+                contentHtml += `<div class="skill-row"><span class="skill-type">Group :</span> <span class="skill-value">${a.skills.group}</span></div>`;
+                contentHtml += `<div class="skill-row"><span class="skill-type">Series :</span> <span class="skill-value">${a.skills.series}</span></div>`;
+            }
+
+            const itemHtml = `
+                <div class="fav-item">
+                    <span class="remove-fav" onclick="toggleFavorite(${fav.wIdx}, ${fav.aIdx})">❌</span>
+                    <div class="fav-item-title">${w.nickname} - Essai #${a.attemptNum}</div>
+                    <div class="card-date">${a.timestamp}</div>
+                    <div style="margin-top: 8px;">${contentHtml}</div>
+                </div>
+            `;
+
+            if (w.mode === 'grinding') gridFavs.innerHTML += itemHtml;
+            else lotFavs.innerHTML += itemHtml;
+        });
+
+        if (gridFavs.innerHTML === '') gridFavs.innerHTML = '<div style="color:#565f89; text-align:center;">Aucun favori</div>';
+        if (lotFavs.innerHTML === '') lotFavs.innerHTML = '<div style="color:#565f89; text-align:center;">Aucun favori</div>';
+    }
+
+    function applyFilters() {
+        if (activeWeaponIndex === -1 || !loadedWeapons[activeWeaponIndex]) return;
+
+        const weapon = loadedWeapons[activeWeaponIndex];
+        const resultsContainer = document.getElementById('resultsContainer');
+        resultsContainer.innerHTML = "";
+        let matchCount = 0;
+
+        weapon.attempts.forEach((attempt, aIdx) => {
+            let finalPass = false;
+
+            // --- FILTRAGE GRINDING ---
+            if (weapon.mode === 'grinding') {
+                const mainOp = document.getElementById('mainOp').value;
+                const filter3EX = document.getElementById('chk3ex').checked;
+                const filter4EX = document.getElementById('chk4ex').checked;
+                
+                let activeSlots = [];
+                for (let i = 1; i <= 5; i++) {
+                    const val = document.getElementById(`slot${i}`).value;
+                    const op = (i < 5) ? document.getElementById(`op${i}`).value : 'AND';
+                    if (val !== "") activeSlots.push({ val: val, op: op });
+                }
+
+                const bonuses = attempt.bonuses || [];
+                let defaultPass = false;
+                const exCount = bonuses.filter(b => b.endsWith('EX')).length;
+                if (filter3EX && filter4EX) defaultPass = (exCount >= 4);
+                else if (filter3EX) defaultPass = (exCount >= 3);
+                else if (filter4EX) defaultPass = (exCount >= 4);
+                const hasStandardFilter = filter3EX || filter4EX;
+
+                let customPass = true;
+                if (activeSlots.length > 0) {
+                    let tempBonuses = [...bonuses]; 
+                    const consumeBonus = (val) => {
+                        let idx = -1;
+                        if (val === "ANY_ATTAQUE") idx = tempBonuses.findIndex(b => b.toLowerCase().includes("attaque"));
+                        else if (val === "ANY_AFFINITE") idx = tempBonuses.findIndex(b => b.toLowerCase().includes("affinité"));
+                        else if (val === "ANY_ELEMENT") idx = tempBonuses.findIndex(b => b.toLowerCase().includes("élémentaire"));
+                        else idx = tempBonuses.indexOf(val);
+
+                        if (idx !== -1) { tempBonuses.splice(idx, 1); return true; }
+                        return false;
+                    };
+
+                    customPass = consumeBonus(activeSlots[0].val);
+                    for (let i = 1; i < activeSlots.length; i++) {
+                        const operator = activeSlots[i-1].op;
+                        if (operator === 'AND') customPass = customPass ? consumeBonus(activeSlots[i].val) : false;
+                        else if (operator === 'OR') customPass = !customPass ? consumeBonus(activeSlots[i].val) : true;
+                    }
+                }
+
+                if (hasStandardFilter && activeSlots.length > 0) finalPass = (mainOp === 'AND') ? (defaultPass && customPass) : (defaultPass || customPass);
+                else if (hasStandardFilter) finalPass = defaultPass;
+                else if (activeSlots.length > 0) finalPass = customPass;
+                else finalPass = true;
+            } 
+            
+            // --- FILTRAGE LOTTERY ---
+            else if (weapon.mode === 'lottery') {
+                const groupFilter = document.getElementById('filterGroup').value;
+                const seriesFilter = document.getElementById('filterSeries').value;
+                
+                finalPass = true;
+                if(groupFilter && attempt.skills?.group !== groupFilter) finalPass = false;
+                if(seriesFilter && attempt.skills?.series !== seriesFilter) finalPass = false;
+            }
+
+            // --- AFFICHAGE ---
+            if (finalPass) {
+                matchCount++;
+                const isFav = favorites.some(f => f.wIdx === activeWeaponIndex && f.aIdx === aIdx);
+                
+                let contentHtml = '';
+                if(weapon.mode === 'grinding') {
+                    attempt.bonuses.forEach(b => {
+                        const parsed = parseBonusString(b);
+                        contentHtml += `<div class="bonus-row"><span>${parsed.nom}</span><span class="lvl-${parsed.niveau}">${parsed.niveau}</span></div>`;
+                    });
+                } else if(weapon.mode === 'lottery') {
+                    contentHtml += `<div class="skill-row"><span class="skill-type">Group :</span> <span class="skill-value">${attempt.skills.group}</span></div>`;
+                    contentHtml += `<div class="skill-row"><span class="skill-type">Series :</span> <span class="skill-value">${attempt.skills.series}</span></div>`;
+                }
+
+                resultsContainer.innerHTML += `
+                    <div class="result-card">
+                        <div class="card-header-top">
+                            <div class="card-title">Essai #${attempt.attemptNum}</div>
+                            <button class="star-btn ${isFav ? 'is-fav' : ''}" onclick="toggleFavorite(${activeWeaponIndex}, ${aIdx})">
+                                ${isFav ? '★' : '☆'}
+                            </button>
+                        </div>
+                        <div class="card-date">${attempt.timestamp}</div>
+                        <div>${contentHtml}</div>
+                    </div>`;
+            }
+        });
+
+        document.getElementById('resultsCountText').innerText = `${matchCount} essai(s) trouvé(s) sur un total de ${weapon.attempts.length} (Onglet: ${weapon.nickname})`;
+    }
+
+    initCustomFilters();
+</script>
+</body>
+</html>
