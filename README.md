@@ -92,7 +92,7 @@ Thanks to Gemini for the initial code structure.
 
 
 # Version Francaise
-# Auto-Reroll Monster Hunter Wilds
+# 🐉 Auto-Reroll Monster Hunter Wilds
 
 Ce script PowerShell permet d'automatiser le processus de **reroll** (réinitialisation et renforcement) des armes dans **Monster Hunter Wilds**. 
 
@@ -177,4 +177,5 @@ Ces outils sont des outils d'automatisation et de confort. Utilisez-les de mani�
 
 ## Crédit 
 Ce projet web est initialement fortement inspiré du travai de [https://github.com/himut1](himut1) que je souhaitait améliorer et utiliser à ma sauce.
+
 Merci Gemini pour la structure initiale du code.
